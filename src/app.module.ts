@@ -3,10 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModule, loggingMiddleware } from "nestjs-prisma";
 import { AuthModule } from './auth/auth.module';
 import { APP_GUARD } from '@nestjs/core';
-import { AccessTokenGuard } from './common/guards';
-import { UtilsModule } from './utils/utils.module';
-import { ChatModule } from './chat/chat.module';
-import { UsersModule } from './users/users.module';
+import { PostModule } from './post/post.module';
+import { OpenaiModule } from './openai/openai.module';
 
 @Module({
   imports: [
@@ -26,16 +24,10 @@ import { UsersModule } from './users/users.module';
       }
     }),
     AuthModule,
-    UtilsModule,
-    ChatModule,
-    UsersModule,
+    PostModule,
+    OpenaiModule
   ],
   controllers: [],
-  providers: [
-    {
-      provide: APP_GUARD,
-      useClass: AccessTokenGuard,
-    },
-  ],
+  providers: [],
 })
 export class AppModule { }

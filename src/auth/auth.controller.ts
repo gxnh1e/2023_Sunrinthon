@@ -1,26 +1,24 @@
 
 
-import { Body, Controller, HttpCode, HttpException, HttpStatus, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpException, HttpStatus, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { ApiBearerAuth, ApiBody, ApiTags } from '@nestjs/swagger';
-import { LoginDto, RegisterDto } from './dto/Auth.dto';
-import { Public, GetCurrentUserID, GetCurrentUser } from "../common/decorators";
-import { RefreshTokenGuard } from "../common/guards"
-import { Response } from 'express';
+import { RegisterDto } from './dto/Register.Dto';
+import { LoginDto } from './dto/Login.Dto';
+import { AuthGuard } from '@nestjs/passport';
+import { Request, Response } from 'express';
+import { ConfigService } from '@nestjs/config';
+import { use } from 'passport';
 
-@ApiTags('Auth')
-@Controller('api/auth')
+@Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) { }
+  constructor(private readonly authService: AuthService,
+    private readonly config: ConfigService) { }
 
-  @Public()
   @Post('/register')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiBody({ type: RegisterDto })
   async register(@Body() body: RegisterDto, @Res() res: Response) {
-    const { accessToken, refreshToken } = await this.authService.register(body);
+    const Tokens = await this.authService.register(body);
 
-    res.cookie('refreshToken', refreshToken, {
+    res.cookie('auth-tokens', Tokens, {
       httpOnly: true,
       secure: true,
       sameSite: 'none',
@@ -28,17 +26,14 @@ export class AuthController {
       domain: 'nabomhalang.com'
     });
 
-    return res.json({ accessToken: accessToken, message: "User registered successfully" });
+    return res.json({ accessToken: Tokens.accessToken, message: "User registered successfully" });
   }
 
-  @Public()
   @Post('/login')
-  @HttpCode(HttpStatus.OK)
-  @ApiBody({ type: LoginDto })
   async login(@Body() body: LoginDto, @Res() res: Response) {
-    const { accessToken, refreshToken } = await this.authService.login(body);
+    const Tokens = await this.authService.login(body);
 
-    res.cookie('refreshToken', refreshToken, {
+    res.cookie('auth-tokens', Tokens, {
       httpOnly: true,
       secure: true,
       sameSite: 'none',
@@ -46,38 +41,22 @@ export class AuthController {
       domain: 'nabomhalang.com'
     });
 
-    return res.json({ accessToken: accessToken, message: "User logged in successfully" });
+    return res.json({ accessToken: Tokens.accessToken, message: "User registered successfully" });
   }
 
-  @Post('/logout')
-  @ApiBearerAuth()
-  @HttpCode(HttpStatus.OK)
-  logout(@GetCurrentUserID() id: string, @Res() res: Response) {
-    if (this.authService.logout(id)) {
-      res.clearCookie('refreshToken', {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        domain: 'nabomhalang.com'
-      });
-      return res.json({ message: "User logged out successfully" });
-    } else {
-      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+  @Get('/google')
+  @UseGuards(AuthGuard('google'))
+  googleAuth() { }
+
+  @Get('/google/callback')
+  @UseGuards(AuthGuard('google'))
+  async googleLogin(@Req() req: Request, @Res() res: Response) {
+    if (!req.user) {
+      throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
     }
-  }
+    const Tokens = await this.authService.googleLogin(req.user.email[0].value, `${req.user?.username?.familyName}${req.user?.username?.givenName}`);
 
-  @Public()
-  @Post('/refresh')
-  @UseGuards(RefreshTokenGuard)
-  @HttpCode(HttpStatus.OK)
-  async refresh(
-    @GetCurrentUserID() id: string,
-    @GetCurrentUser('refreshToken') refreshTokens: string,
-    @Res() res: Response
-  ) {
-    const { accessToken, refreshToken } = await this.authService.refresh(id, refreshTokens);
-
-    res.cookie('refreshToken', refreshToken, {
+    res.cookie('auth-tokens', Tokens, {
       httpOnly: true,
       secure: true,
       sameSite: 'none',
@@ -85,6 +64,21 @@ export class AuthController {
       domain: 'nabomhalang.com'
     });
 
-    return res.json({ accessToken: accessToken, message: "User refreshed successfully" });
+    res.redirect(this.config.get('FRONT_URL'));
+  }
+
+  @Get('/logout')
+  @UseGuards(AuthGuard('jwt'))
+  async logout(@Req() req: Request, @Res() res: Response) {
+    await this.authService.logout(req.user.id);
+
+    res.clearCookie('auth-tokens', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      domain: 'nabomhalang.com'
+    });
+
+    return res.json({ message: "User logged out successfully" });
   }
 }

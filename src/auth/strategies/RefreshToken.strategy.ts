@@ -11,7 +11,7 @@ export class RefreshTokenStrategy extends PassportStrategy(Strategy, 'jwt-refres
   constructor(config: ConfigService) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([(req: Request) => {
-        const refreshToken = req?.cookies['refreshToken'];
+        const { refreshToken } = req?.cookies['auth-tokens'];
         return refreshToken;
       }]),
       secretOrKey: config.get<string>('JWT_REFRESH_TOKEN_SECRET'),
